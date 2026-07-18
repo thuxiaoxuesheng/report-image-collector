@@ -1,0 +1,9 @@
+{
+  "name": "xhs-medical-image-collector-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local Node runtimes used by the Windows collector",
+  "dependencies": {
+    "mmx-cli": "1.0.15"
+  }
+}

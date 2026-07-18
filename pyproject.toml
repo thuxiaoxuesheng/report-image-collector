@@ -1,0 +1,44 @@
+[project]
+name = "xhs-medical-image-collector"
+version = "0.1.0"
+description = "受控的小红书检查检验图片采集与人工审核系统"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "sqlalchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.8,<3",
+  "python-multipart>=0.0.20,<1",
+  "playwright>=1.51,<2",
+  "httpx>=0.28,<1",
+  "PyJWT[crypto]>=2.10,<3",
+  "cryptography>=44,<47",
+  "Pillow>=11,<13",
+  "keyring>=25.6,<26",
+  "tzdata>=2025.2",
+  "psutil>=6.1,<8",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "ruff>=0.11,<1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]

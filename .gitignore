@@ -1,0 +1,41 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!third_party/social-media-copilot/.env.development
+!third_party/social-media-copilot/.env.production
+.deploy-cache/
+
+# Runtime data: database, browser sessions, downloaded images and exports
+data/
+logs/
+.playwright-browsers/
+
+# Python
+.venv/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node and extension build output
+node_modules/
+**/node_modules/
+third_party/social-media-copilot/.wxt/
+third_party/social-media-copilot/.output/
+
+# Generated installers and release artifacts
+.tmp/
+dist/
+deploy/windows-server/packages/
+*.log
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini

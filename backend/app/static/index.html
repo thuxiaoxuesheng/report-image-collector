@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="same-origin" />
+  <title>检查检验图片采集</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">检</div>
+        <div><strong>图片采集台</strong><small>多用户隔离版</small></div>
+      </div>
+      <nav id="main-nav">
+        <button class="nav-item active" data-page="dashboard"><span>◫</span>概览</button>
+        <button class="nav-item" data-page="browser"><span>◎</span>小红书登录</button>
+        <button class="nav-item" data-page="tasks"><span>≡</span>采集任务</button>
+        <button class="nav-item" data-page="review"><span>▧</span>图片审核</button>
+        <button class="nav-item" data-page="settings"><span>⚙</span>设置</button>
+        <button id="admin-nav" class="nav-item hidden" data-page="admin"><span>◇</span>用户管理</button>
+      </nav>
+      <div class="sidebar-note">
+        <span class="status-dot"></span>
+        <div><strong>安全执行</strong><small>用户隔离 · 可并发任务</small></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">运行概览</h1>
+          <p id="page-subtitle">查看任务状态、待审核图片与保留时间</p>
+        </div>
+        <div class="button-row"><div class="user-pill"><span id="user-avatar">用</span><span id="user-name">正在验证…</span></div><a class="secondary logout-link" href="/site-logout">退出</a></div>
+      </header>
+
+      <div id="notice" class="notice hidden"></div>
+
+      <section id="page-dashboard" class="page active">
+        <div class="metric-grid" id="metrics"></div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>最近任务</h2><p>不同用户并行，同一用户安全串行</p></div><button class="primary" data-goto="tasks">新建任务</button></div>
+          <div id="recent-tasks" class="task-list"></div>
+        </div>
+      </section>
+
+      <section id="page-browser" class="page">
+        <div class="browser-layout">
+          <div class="panel browser-panel">
+            <div class="panel-head">
+              <div><h2>受限浏览器</h2><p>仅转发小红书画面、点击和键盘输入，不显示Windows桌面</p></div>
+              <div class="button-row"><button id="browser-open" class="primary">打开浏览器</button><button id="browser-close" class="secondary">完成登录</button></div>
+            </div>
+            <div id="browser-screen" class="browser-screen empty">
+              <img id="browser-image" alt="远程小红书浏览器画面" draggable="false" />
+              <div class="browser-placeholder"><div class="placeholder-icon">◎</div><h3>浏览器尚未开启</h3><p>点击“打开浏览器”后扫码或输入手机号登录</p></div>
+            </div>
+            <div class="browser-controls">
+              <input id="browser-text" maxlength="100" placeholder="点击网页输入框后，在这里输入手机号或验证码" />
+              <button id="browser-send" class="primary">发送文字</button>
+              <button class="key-btn" data-key="Backspace">退格</button>
+              <button class="key-btn" data-key="Enter">回车</button>
+              <button id="scroll-up" class="key-btn">上滚</button>
+              <button id="scroll-down" class="key-btn">下滚</button>
+            </div>
+          </div>
+          <aside class="panel guide-card">
+            <h2>登录说明</h2>
+            <ol><li>打开受限浏览器</li><li>扫码或输入手机号</li><li>自行输入短信验证码</li><li>处理小红书登录确认</li><li>看到首页后点击“完成登录”</li></ol>
+            <div id="login-state" class="state-card neutral"><span>●</span><div><strong>尚未检查</strong><small>登录状态会保存在本机</small></div></div>
+            <hr />
+            <button id="clear-profile" class="danger-link">清除登录状态</button>
+          </aside>
+        </div>
+      </section>
+
+      <section id="page-tasks" class="page">
+        <div class="two-column">
+          <form id="task-form" class="panel form-panel">
+            <div class="panel-head"><div><h2>创建采集任务</h2><p>排序固定为“最新”，只采集时间范围内的新图文笔记</p></div></div>
+            <label>任务名称<input id="task-name" required maxlength="160" placeholder="例如：7月检查报告采集" /></label>
+            <div class="form-row"><label>开始日期<input id="start-date" type="date" required /></label><label>结束日期<input id="end-date" type="date" required /></label></div>
+            <div class="template-box">
+              <label>内置检索流程
+                <select id="search-template">
+                  <option value="complete">多样化报告（推荐）</option>
+                  <option value="laboratory">常规检验</option>
+                  <option value="specialty">专项检验</option>
+                  <option value="imaging">影像与功能检查</option>
+                  <option value="pathology">病理与分子</option>
+                  <option value="core">宽泛补漏（噪声较高）</option>
+                </select>
+              </label>
+              <button id="apply-template" type="button" class="secondary">应用流程</button>
+            </div>
+            <p id="template-description" class="template-description"></p>
+            <div class="keyword-head"><label>关键词与目标笔记数</label><button id="add-keyword" type="button" class="text-button">＋ 添加关键词</button></div>
+            <div id="keyword-list" class="keyword-list"></div>
+            <details class="terms-box">
+              <summary>使用与个人信息处理边界</summary>
+              <ul>
+                <li>使用者应自行确认对笔记、图片及其中个人信息具有合法的采集、保存、导出和使用权限。</li>
+                <li>系统不提供OCR、自动打码、身份信息脱敏、医学结论或内容正确性判断；使用者须在导出前人工复核。</li>
+                <li>只有在使用者主动运行AI筛选并再次确认后，图片才会发送给其自行配置的视觉模型服务商；模型结果仅用于辅助筛选。</li>
+                <li>候选图片按系统保留规则自动删除，小红书登录状态独立长期保存；遇到验证码、访问限制或页面异常时任务会暂停，不会尝试绕过。</li>
+              </ul>
+            </details>
+            <label class="check-row"><input id="privacy-confirm" type="checkbox" required /><span>我已阅读上述边界，确认已获得相应处理权限，并对采集、保存、导出和后续使用行为负责。</span></label>
+            <div class="boundary-note">单次最多10个关键词；每个关键词目标、单任务目标总数和每日新增数量均不设上限，日期跨度最多180天。系统仍按低频间隔运行，并会在验证码、访问限制或结果耗尽时暂停或结束当前检索词。图片仍遵循24小时审核保留和48小时绝对清理规则，超长任务建议分批审核导出。</div>
+            <button type="submit" class="primary full">提交到队列</button>
+          </form>
+          <div class="panel">
+            <div class="panel-head"><div><h2>任务队列</h2><p>不同用户可并行，异常时立即暂停对应任务</p></div><button id="refresh-tasks" class="secondary">刷新</button></div>
+            <div id="all-tasks" class="task-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-review" class="page">
+        <div class="panel review-panel">
+          <div class="panel-head"><div><h2>快速筛选图片</h2><p>图片默认保留；可选AI一键筛选，再人工点击错误图片排除或恢复</p></div><button id="export-selected" class="primary">一键导出保留图片 ZIP</button></div>
+          <div id="review-summary" class="review-summary"><strong>请选择任务</strong></div>
+          <div class="review-toolbar">
+            <select id="review-task"><option value="">选择任务</option></select>
+            <button id="ai-classify" class="secondary" title="对全部或当前检索词执行AI判断，并按结果设置保留状态">✦ AI一键筛选（可选）</button>
+            <button id="undo-ai-screen" class="secondary" title="恢复最近一次AI筛选前的选择状态">撤销AI筛选</button>
+            <select id="review-view"><option value="all">全部图片</option><option value="selected">当前保留</option><option value="excluded">已排除</option><option value="ai_non_report">AI判断为非报告</option></select>
+            <input id="review-note-filter" placeholder="筛选笔记标题或ID" />
+            <select id="review-size" title="缩略图大小"><option value="small">小图</option><option value="medium" selected>中图</option><option value="large">大图</option></select>
+            <button id="select-all" class="secondary">当前视图全选</button><button id="select-none" class="secondary">当前视图全不选</button><button id="invert-select" class="secondary">当前视图反选</button>
+            <span id="review-count" class="count-label">0 张</span>
+          </div>
+          <div id="review-keywords" class="keyword-tabs"></div>
+          <div id="image-grid" class="review-sections"><div class="empty-state">请选择一个待审核任务</div></div>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="settings-grid">
+          <div class="panel form-panel">
+            <div class="panel-head"><div><h2>视觉模型</h2><p>每个用户使用自己的配置，仅判断报告单 / 非报告</p></div><span id="key-state" class="badge">未检查</span></div>
+            <label>接入方式<select id="model-provider"><option value="minimax_token_plan">MiniMax Token Plan</option><option value="openai_compatible">OpenAI兼容视觉模型</option></select></label>
+            <div id="openai-fields" class="hidden">
+              <label>API Base URL<input id="model-base-url" placeholder="https://api.example.com/v1" /></label>
+              <label>视觉模型名称<input id="model-name" placeholder="例如供应商的视觉模型名称" /></label>
+            </div>
+            <label>API Key<input id="model-api-key" type="password" autocomplete="new-password" placeholder="留空表示继续使用已保存的密钥" /></label>
+            <p id="model-key-hint" class="template-description">尚未保存密钥</p>
+            <p id="model-test-state" class="template-description"></p>
+            <div class="button-row"><button id="save-model" class="primary">安全保存</button><button id="test-model" class="secondary">测试连接</button><button id="delete-model" class="secondary">删除配置</button></div>
+          </div>
+          <div class="panel form-panel">
+            <div class="panel-head"><div><h2>数据清理</h2><p>图片进入待审核后保留24小时，任何图片最长保留48小时</p></div></div>
+            <div class="setting-row"><span>原图与缩略图</span><strong>24小时</strong></div><div class="setting-row"><span>导出ZIP</span><strong>2小时</strong></div><div class="setting-row"><span>去重笔记ID</span><strong>长期</strong></div>
+            <button id="run-cleanup" class="secondary full">立即执行过期清理</button>
+          </div>
+          <div class="panel form-panel">
+            <div class="panel-head"><div><h2>修改密码</h2><p>修改后，其他设备上的登录会话将失效</p></div></div>
+            <label>当前密码<input id="current-password" type="password" autocomplete="current-password" /></label>
+            <label>新密码<input id="new-password" type="password" minlength="12" autocomplete="new-password" /></label>
+            <label>再次输入新密码<input id="confirm-password" type="password" minlength="12" autocomplete="new-password" /></label>
+            <button id="change-password" class="secondary full">修改密码</button>
+          </div>
+          <div class="panel safety-card">
+            <h2>平台友好策略</h2>
+            <ul><li>不使用代理池、指纹伪装或验证码识别</li><li>详情适配仅在本机回环地址运行</li><li>每位用户一个真实登录目录，同一用户只运行一个采集任务</li><li>页面操作有最小间隔与长暂停</li><li>历史去重，避免重复访问和下载</li><li>验证码、访问限制、结构变化立即停止</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-admin" class="page">
+        <div class="two-column">
+          <form id="user-form" class="panel form-panel">
+            <div class="panel-head"><div><h2>添加账号</h2><p>系统生成一次性初始密码，用户首次登录后必须修改</p></div></div>
+            <label>用户名<input id="new-username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" placeholder="例如 user01" /></label>
+            <label>显示名称<input id="new-display-name" required maxlength="120" placeholder="例如 张三" /></label>
+            <button type="submit" class="primary full">创建独立账号</button>
+            <div id="new-user-result" class="boundary-note hidden"></div>
+          </form>
+          <div class="panel">
+            <div class="panel-head"><div><h2>账号列表</h2><p>停用账号会退出登录并暂停其任务</p></div><button id="refresh-users" class="secondary">刷新</button></div>
+            <div id="admin-users" class="task-list"></div>
+          </div>
+          <div class="panel admin-queue-panel">
+            <div class="panel-head"><div><h2>全局执行队列</h2><p>只显示运行元数据，不开放其他用户的图片和采集内容</p></div><button id="refresh-admin-queue" class="secondary">刷新队列</button></div>
+            <div id="admin-queue" class="task-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="image-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card"><button id="modal-close" class="modal-close">×</button><div class="modal-image-wrap"><img id="modal-image" alt="大图预览" /></div><div class="modal-side"><div id="modal-meta"></div><label class="check-row"><input id="modal-selected" type="checkbox" /><span>保留并导出</span></label><button id="modal-save" class="primary full">保存并查看下一张</button></div></div>
+  </div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
