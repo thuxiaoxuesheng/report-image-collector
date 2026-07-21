@@ -5,12 +5,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import ValidationError
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
+import backend.app.ai as ai_module
 import backend.app.bootstrap as bootstrap
 import backend.app.collector as collector
 import backend.app.exporter as exporter
@@ -18,10 +20,11 @@ from backend.app.ai import _openai_endpoint, _parse_json
 from backend.app.api import (
     create_user,
     move_queued_task,
+    read_settings,
     save_model_configuration,
     undo_ai_screen,
 )
-from backend.app.auth import CurrentUser
+from backend.app.auth import CurrentUser, get_current_user
 from backend.app.browser import is_allowed_url
 from backend.app.collector import (
     AttentionRequired,
@@ -29,8 +32,9 @@ from backend.app.collector import (
     detect_page_block,
     extract_xsec_token,
 )
-from backend.app.database import Base
+from backend.app.database import Base, get_db
 from backend.app.date_utils import parse_xhs_datetime
+from backend.app.main import app
 from backend.app.models import (
     CollectedImage,
     CollectionTask,
@@ -110,7 +114,7 @@ def test_switching_model_provider_requires_a_new_key(tmp_path: Path) -> None:
         user = User(
             email="model@example.com",
             display_name="模型用户",
-            role="user",
+            role="admin",
             organization_id=organization.id,
         )
         db.add(user)
@@ -131,6 +135,112 @@ def test_switching_model_provider_requires_a_new_key(tmp_path: Path) -> None:
         with pytest.raises(HTTPException, match="新API Key") as error:
             save_model_configuration(payload, db, current)
         assert error.value.status_code == 422
+
+
+def test_all_users_share_the_administrator_model_configuration(
+    tmp_path: Path, monkeypatch
+) -> None:
+    engine = create_engine(f"sqlite:///{(tmp_path / 'shared-model.db').as_posix()}")
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, expire_on_commit=False)
+    monkeypatch.setattr(ai_module, "SessionLocal", test_session)
+
+    with test_session() as db:
+        admin_workspace = Organization(name="管理员模型空间")
+        user_workspace = Organization(name="普通用户模型空间")
+        db.add_all([admin_workspace, user_workspace])
+        db.flush()
+        admin = User(
+            email=ai_module.get_settings().admin_email.lower(),
+            display_name="管理员",
+            role="admin",
+            organization_id=admin_workspace.id,
+        )
+        ordinary = User(
+            email="shared-model-user@example.com",
+            display_name="普通用户",
+            role="user",
+            organization_id=user_workspace.id,
+        )
+        db.add_all([admin, ordinary])
+        db.flush()
+        db.add_all(
+            [
+                ModelConfiguration(
+                    organization_id=admin_workspace.id,
+                    provider="minimax_token_plan",
+                    encrypted_api_key=encrypt_secret("administrator-shared-key"),
+                    key_hint="adm••••-key",
+                ),
+                ModelConfiguration(
+                    organization_id=user_workspace.id,
+                    provider="minimax_token_plan",
+                    encrypted_api_key=encrypt_secret("ignored-user-key"),
+                    key_hint="old••••-key",
+                ),
+            ]
+        )
+        db.commit()
+
+        ordinary_settings = read_settings(
+            db, CurrentUser(user=ordinary, organization=user_workspace)
+        )
+        admin_settings = read_settings(
+            db, CurrentUser(user=admin, organization=admin_workspace)
+        )
+
+    configuration, decrypted_key = ai_module._configuration(user_workspace.id)
+
+    assert configuration.organization_id == admin_workspace.id
+    assert decrypted_key == "administrator-shared-key"
+    assert ordinary_settings["model_configured"] is True
+    assert ordinary_settings["model_can_manage"] is False
+    assert ordinary_settings["key_hint"] is None
+    assert ordinary_settings["last_test_message"] == "管理员已配置全局视觉模型"
+    assert admin_settings["model_can_manage"] is True
+    assert admin_settings["key_hint"] == "adm••••-key"
+
+
+def test_ordinary_user_cannot_modify_the_shared_model_configuration(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(f"sqlite:///{(tmp_path / 'model-permission.db').as_posix()}")
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, expire_on_commit=False)
+    with test_session() as db:
+        workspace = Organization(name="普通用户权限空间")
+        db.add(workspace)
+        db.flush()
+        ordinary = User(
+            email="model-permission@example.com",
+            display_name="普通用户",
+            role="user",
+            organization_id=workspace.id,
+        )
+        db.add(ordinary)
+        db.commit()
+
+    def override_db():
+        with test_session() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        user=ordinary, organization=workspace
+    )
+    try:
+        response = TestClient(app).put(
+            "/api/settings/model",
+            json={
+                "provider": "minimax_token_plan",
+                "api_key": "ordinary-user-must-not-save-this-key",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "需要管理员权限"
 
 
 def test_allowed_browser_navigation_is_restricted_to_xhs() -> None:

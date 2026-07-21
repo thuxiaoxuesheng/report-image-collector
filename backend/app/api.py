@@ -11,7 +11,11 @@ from PIL import Image
 from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session, selectinload
 
-from .ai import classify_image
+from .ai import (
+    classify_image,
+    global_model_configuration,
+    global_model_organization_id,
+)
 from .audit import write_audit
 from .auth import CurrentUser, get_current_user, require_admin
 from .browser import browser_manager
@@ -200,10 +204,7 @@ def admin_users(
     db: Session = Depends(get_db), current: CurrentUser = Depends(require_admin)
 ) -> list[dict]:
     users = list(db.scalars(select(User).order_by(User.created_at, User.username)))
-    configurations = {
-        item.organization_id: item
-        for item in db.scalars(select(ModelConfiguration)).all()
-    }
+    shared_model_configured = bool(global_model_configuration(db))
     return [
         {
             "id": user.id,
@@ -214,9 +215,7 @@ def admin_users(
             "must_change_password": user.must_change_password,
             "created_at": user.created_at,
             "last_login_at": user.last_login_at,
-            "model_configured": bool(
-                user.organization_id and user.organization_id in configurations
-            ),
+            "model_configured": shared_model_configured,
         }
         for user in users
     ]
@@ -909,12 +908,8 @@ async def classify_existing_task(
     task = get_scoped_task(db, task_id, current)
     if task.status not in {TaskStatus.REVIEW, TaskStatus.EXPORTED}:
         raise HTTPException(status_code=409, detail="只有已完成采集的任务可以运行AI判断")
-    if not db.scalar(
-        select(ModelConfiguration.id).where(
-            ModelConfiguration.organization_id == task.organization_id
-        )
-    ):
-        raise HTTPException(status_code=409, detail="请先在设置中配置视觉模型")
+    if not global_model_configuration(db):
+        raise HTTPException(status_code=409, detail="管理员尚未配置全局视觉模型")
     keyword = None
     if payload.keyword_id:
         keyword = db.get(TaskKeyword, payload.keyword_id)
@@ -1061,20 +1056,25 @@ def download_export(
 def read_settings(
     db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)
 ) -> dict:
-    organization = default_org(db, current)
-    config = db.scalar(
-        select(ModelConfiguration).where(
-            ModelConfiguration.organization_id == organization.id
-        )
-    )
+    default_org(db, current)
+    config = global_model_configuration(db)
+    can_manage = current.user.role == "admin"
     return {
         "model_configured": bool(config),
+        "model_scope": "global",
+        "model_can_manage": can_manage,
         "provider": config.provider if config else None,
         "base_url": config.base_url if config else None,
         "model_name": config.model_name if config else None,
-        "key_hint": config.key_hint if config else None,
+        "key_hint": config.key_hint if config and can_manage else None,
         "last_test_ok": config.last_test_ok if config else None,
-        "last_test_message": config.last_test_message if config else None,
+        "last_test_message": (
+            config.last_test_message
+            if config and can_manage
+            else "管理员已配置全局视觉模型"
+            if config
+            else "管理员尚未配置全局视觉模型"
+        ),
         "last_test_at": config.last_test_at if config else None,
         "browser_headless": settings.browser_headless,
         "image_retention_hours": settings.image_retention_hours,
@@ -1085,14 +1085,10 @@ def read_settings(
 def save_model_configuration(
     payload: ModelConfigurationUpdate,
     db: Session = Depends(get_db),
-    current: CurrentUser = Depends(get_current_user),
+    current: CurrentUser = Depends(require_admin),
 ) -> dict:
-    organization = default_org(db, current)
-    config = db.scalar(
-        select(ModelConfiguration).where(
-            ModelConfiguration.organization_id == organization.id
-        )
-    )
+    organization_id = global_model_organization_id(db)
+    config = global_model_configuration(db)
     if not config and not payload.api_key:
         raise HTTPException(status_code=422, detail="首次配置必须填写API Key")
     if config and config.provider != payload.provider and not payload.api_key:
@@ -1102,7 +1098,7 @@ def save_model_configuration(
         )
     if not config:
         config = ModelConfiguration(
-            organization_id=organization.id,
+            organization_id=organization_id,
             provider=payload.provider,
             encrypted_api_key="",
         )
@@ -1130,7 +1126,7 @@ def save_model_configuration(
         db,
         action="model.configuration.save",
         user_id=current.user.id,
-        organization_id=organization.id,
+        organization_id=organization_id,
         target_type="model_configuration",
         target_id=config.id,
         detail={"provider": payload.provider, "model_name": config.model_name},
@@ -1141,21 +1137,17 @@ def save_model_configuration(
 
 @router.delete("/settings/model")
 def clear_model_configuration(
-    db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)
+    db: Session = Depends(get_db), current: CurrentUser = Depends(require_admin)
 ) -> dict:
-    organization = default_org(db, current)
-    config = db.scalar(
-        select(ModelConfiguration).where(
-            ModelConfiguration.organization_id == organization.id
-        )
-    )
+    organization_id = global_model_organization_id(db)
+    config = global_model_configuration(db)
     if config:
         db.delete(config)
         write_audit(
             db,
             action="model.configuration.delete",
             user_id=current.user.id,
-            organization_id=organization.id,
+            organization_id=organization_id,
         )
         db.commit()
     return {"ok": True, "configured": False}
@@ -1163,18 +1155,13 @@ def clear_model_configuration(
 
 @router.post("/settings/model/test")
 async def test_model_configuration(
-    db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)
+    db: Session = Depends(get_db), current: CurrentUser = Depends(require_admin)
 ) -> dict:
-    organization = default_org(db, current)
-    config = db.scalar(
-        select(ModelConfiguration).where(
-            ModelConfiguration.organization_id == organization.id
-        )
-    )
+    organization_id = global_model_organization_id(db)
+    config = global_model_configuration(db)
     if not config:
         raise HTTPException(status_code=409, detail="请先保存视觉模型配置")
     config_id = config.id
-    organization_id = organization.id
     release_read_transaction(db)
     with tempfile.TemporaryDirectory(prefix="xhs-model-test-") as directory:
         path = Path(directory) / "non-report.png"

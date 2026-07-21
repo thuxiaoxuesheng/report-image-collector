@@ -137,6 +137,7 @@ input:focus,select:focus { border-color: #8da9d2; box-shadow: 0 0 0 3px rgba(57,
 .image-card-footer small { display: block; color: var(--muted); margin-top: 4px; }
 .category-chip { position: absolute; top: 9px; right: 8px; background: rgba(20,27,34,.82); color: white; padding: 4px 7px; border-radius: 99px; font-size: 10px; }
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.model-admin-controls { display: flex; flex-direction: column; gap: 12px; }
 .logout-link { text-decoration: none; display: inline-flex; align-items: center; }
 .credential-result { overflow-wrap: anywhere; line-height: 1.7; }
 .safety-card { grid-column: 1/-1; }

@@ -12,10 +12,11 @@ from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import SessionLocal
-from .models import ModelConfiguration
+from .models import ModelConfiguration, User
 from .secrets import decrypt_secret
 
 REPORT_PROMPT = """判断这张图片的主体是否为医学检查或医学检验报告单。
@@ -38,15 +39,47 @@ def _parse_json(content: str) -> dict:
     return {"is_report": is_report, "confidence": confidence, "reason": reason}
 
 
-def _configuration(organization_id: str) -> tuple[ModelConfiguration, str]:
-    with SessionLocal() as db:
-        config = db.scalar(
-            select(ModelConfiguration).where(
-                ModelConfiguration.organization_id == organization_id
-            )
+def global_model_organization_id(db: Session) -> str:
+    """Return the canonical administrator workspace that owns the shared model."""
+    settings = get_settings()
+    organization_id = db.scalar(
+        select(User.organization_id).where(
+            User.email == settings.admin_email.lower(),
+            User.role == "admin",
+            User.active.is_(True),
+            User.organization_id.is_not(None),
         )
+    )
+    if not organization_id:
+        organization_id = db.scalar(
+            select(User.organization_id)
+            .where(
+                User.role == "admin",
+                User.active.is_(True),
+                User.organization_id.is_not(None),
+            )
+            .order_by(User.created_at, User.id)
+            .limit(1)
+        )
+    if not organization_id:
+        raise RuntimeError("系统管理员工作空间不存在")
+    return organization_id
+
+
+def global_model_configuration(db: Session) -> ModelConfiguration | None:
+    organization_id = global_model_organization_id(db)
+    return db.scalar(
+        select(ModelConfiguration).where(
+            ModelConfiguration.organization_id == organization_id
+        )
+    )
+
+
+def _configuration(_organization_id: str) -> tuple[ModelConfiguration, str]:
+    with SessionLocal() as db:
+        config = global_model_configuration(db)
         if not config:
-            raise RuntimeError("当前用户尚未配置视觉模型")
+            raise RuntimeError("管理员尚未配置全局视觉模型")
         # Copy all values before the ORM object leaves its session.
         detached = ModelConfiguration(
             organization_id=config.organization_id,

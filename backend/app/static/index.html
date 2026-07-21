@@ -104,7 +104,7 @@
               <ul>
                 <li>使用者应自行确认对笔记、图片及其中个人信息具有合法的采集、保存、导出和使用权限。</li>
                 <li>系统不提供OCR、自动打码、身份信息脱敏、医学结论或内容正确性判断；使用者须在导出前人工复核。</li>
-                <li>只有在使用者主动运行AI筛选并再次确认后，图片才会发送给其自行配置的视觉模型服务商；模型结果仅用于辅助筛选。</li>
+                <li>只有在使用者主动运行AI筛选并再次确认后，图片才会发送给管理员统一配置的视觉模型服务商；模型结果仅用于辅助筛选。</li>
                 <li>候选图片按系统保留规则自动删除，小红书登录状态独立长期保存；遇到验证码、访问限制或页面异常时任务会暂停，不会尝试绕过。</li>
               </ul>
             </details>
@@ -141,16 +141,23 @@
       <section id="page-settings" class="page">
         <div class="settings-grid">
           <div class="panel form-panel">
-            <div class="panel-head"><div><h2>视觉模型</h2><p>每个用户使用自己的配置，仅判断报告单 / 非报告</p></div><span id="key-state" class="badge">未检查</span></div>
-            <label>接入方式<select id="model-provider"><option value="minimax_token_plan">MiniMax Token Plan</option><option value="openai_compatible">OpenAI兼容视觉模型</option></select></label>
-            <div id="openai-fields" class="hidden">
-              <label>API Base URL<input id="model-base-url" placeholder="https://api.example.com/v1" /></label>
-              <label>视觉模型名称<input id="model-name" placeholder="例如供应商的视觉模型名称" /></label>
+            <div class="panel-head"><div><h2>全站视觉模型</h2><p>管理员配置一次，所有用户共享，仅判断报告单 / 非报告</p></div><span id="key-state" class="badge">未检查</span></div>
+            <p id="model-scope-note" class="template-description"></p>
+            <div id="model-user-summary" class="hidden">
+              <div class="setting-row"><span>接入方式</span><strong id="model-shared-provider">—</strong></div>
+              <p id="model-shared-status" class="template-description"></p>
             </div>
-            <label>API Key<input id="model-api-key" type="password" autocomplete="new-password" placeholder="留空表示继续使用已保存的密钥" /></label>
-            <p id="model-key-hint" class="template-description">尚未保存密钥</p>
-            <p id="model-test-state" class="template-description"></p>
-            <div class="button-row"><button id="save-model" class="primary">安全保存</button><button id="test-model" class="secondary">测试连接</button><button id="delete-model" class="secondary">删除配置</button></div>
+            <div id="model-admin-controls" class="model-admin-controls">
+              <label>接入方式<select id="model-provider"><option value="minimax_token_plan">MiniMax Token Plan</option><option value="openai_compatible">OpenAI兼容视觉模型</option></select></label>
+              <div id="openai-fields" class="hidden">
+                <label>API Base URL<input id="model-base-url" placeholder="https://api.example.com/v1" /></label>
+                <label>视觉模型名称<input id="model-name" placeholder="例如供应商的视觉模型名称" /></label>
+              </div>
+              <label>API Key<input id="model-api-key" type="password" autocomplete="new-password" placeholder="留空表示继续使用已保存的密钥" /></label>
+              <p id="model-key-hint" class="template-description">尚未保存密钥</p>
+              <p id="model-test-state" class="template-description"></p>
+              <div class="button-row"><button id="save-model" class="primary">安全保存</button><button id="test-model" class="secondary">测试连接</button><button id="delete-model" class="secondary">删除配置</button></div>
+            </div>
           </div>
           <div class="panel form-panel">
             <div class="panel-head"><div><h2>数据清理</h2><p>图片进入待审核后保留24小时，任何图片最长保留48小时</p></div></div>

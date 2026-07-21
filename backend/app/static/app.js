@@ -19,7 +19,7 @@ const pageInfo = {
   browser: ["小红书登录", "在受限浏览器中自行完成扫码、手机号和验证码登录"],
   tasks: ["采集任务", "选择内置检索流程，或自由配置多个关键词"],
   review: ["图片审核", "筛选、预览并决定最终导出的图片"],
-  settings: ["个人设置", "配置自己的AI报告单判断模型"],
+  settings: ["个人设置", "查看管理员统一配置的AI报告单判断模型"],
   admin: ["用户管理", "创建、停用和维护相互隔离的用户"],
 };
 
@@ -493,9 +493,18 @@ function toggleModelFields() {
 async function loadSettings() {
   try {
     const data = await api("/api/settings");
+    const canManage = Boolean(data.model_can_manage);
     const badge = document.getElementById("key-state");
     badge.textContent = data.model_configured ? "已配置" : "未配置";
     badge.className = `badge ${data.model_configured ? "review" : "paused"}`;
+    document.getElementById("model-scope-note").textContent = canManage
+      ? "此处保存的模型账号供所有用户进行AI筛选，普通用户无法查看或修改API Key。"
+      : "视觉模型由管理员统一管理；你可以使用AI筛选，但无法查看或修改模型账号。";
+    document.getElementById("model-admin-controls").classList.toggle("hidden", !canManage);
+    document.getElementById("model-user-summary").classList.toggle("hidden", canManage);
+    const providerNames = { minimax_token_plan: "MiniMax Token Plan", openai_compatible: "OpenAI兼容视觉模型" };
+    document.getElementById("model-shared-provider").textContent = data.model_configured ? (providerNames[data.provider] || "已配置") : "尚未配置";
+    document.getElementById("model-shared-status").textContent = data.last_test_message || "";
     if (data.provider) document.getElementById("model-provider").value = data.provider;
     document.getElementById("model-base-url").value = data.base_url || "";
     document.getElementById("model-name").value = data.model_name || "";
@@ -516,7 +525,7 @@ async function saveModel() {
   try {
     await api("/api/settings/model", { method: "PUT", body: payload });
     document.getElementById("model-api-key").value = "";
-    await loadSettings(); notice("视觉模型配置已加密保存", "success");
+    await loadSettings(); notice("全站视觉模型配置已加密保存", "success");
   } catch (error) { notice(error.message, "error", 8000); }
 }
 
@@ -614,7 +623,7 @@ function initEvents() {
   document.getElementById("model-provider").addEventListener("change", toggleModelFields);
   document.getElementById("save-model").addEventListener("click", saveModel);
   document.getElementById("test-model").addEventListener("click", async () => { try { notice("正在发送内置测试图片…", "info"); const result = await api("/api/settings/model/test", { method: "POST" }); await loadSettings(); notice(result.message, "success"); } catch (error) { await loadSettings(); notice(error.message, "error", 10000); } });
-  document.getElementById("delete-model").addEventListener("click", async () => { if (!confirm("确定删除视觉模型配置？之后仍可人工审核。")) return; try { await api("/api/settings/model", { method: "DELETE" }); await loadSettings(); notice("模型配置已删除", "success"); } catch (error) { notice(error.message,"error"); } });
+  document.getElementById("delete-model").addEventListener("click", async () => { if (!confirm("确定删除全站视觉模型配置？所有用户之后都只能人工审核。")) return; try { await api("/api/settings/model", { method: "DELETE" }); await loadSettings(); notice("全站模型配置已删除", "success"); } catch (error) { notice(error.message,"error"); } });
   document.getElementById("change-password").addEventListener("click", async () => { const current = document.getElementById("current-password"); const password = document.getElementById("new-password"); const confirmation = document.getElementById("confirm-password"); try { await api("/api/auth/change-password", { method: "POST", body: { current_password: current.value, new_password: password.value, confirmation: confirmation.value } }); current.value = ""; password.value = ""; confirmation.value = ""; notice("密码已修改，其他设备已退出", "success"); } catch (error) { notice(error.message, "error"); } });
   document.getElementById("user-form").addEventListener("submit", createAdminUser);
   document.getElementById("refresh-users").addEventListener("click", loadAdminUsers);
