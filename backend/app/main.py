@@ -84,9 +84,9 @@ app = FastAPI(title="小红书检查检验图片采集系统", version="0.1.0", 
 def is_cross_site_write(request: Request) -> bool:
     if request.method in {"GET", "HEAD", "OPTIONS"}:
         return False
-    origin = request.headers.get("origin", "")
+    origin = request.headers.get("origin", "").strip()
     fetch_site = request.headers.get("sec-fetch-site", "")
-    if origin:
+    if origin and origin.casefold() != "null":
         origin_authority = urlsplit(origin).netloc.lower()
         allowed_authorities = {request.headers.get("host", "").lower()}
 
@@ -104,9 +104,19 @@ def is_cross_site_write(request: Request) -> bool:
         # inconsistent Sec-Fetch-Site value even for a same-origin form post.
         return not origin_authority or origin_authority not in allowed_authorities
 
-    # Older clients may omit Origin. In that case Fetch Metadata still blocks
-    # a request that the browser explicitly identifies as cross-site.
+    # Older clients may omit Origin, while sandboxed/privacy-oriented clients
+    # can serialize an opaque origin as the literal value "null". In either
+    # case use browser-controlled Fetch Metadata: the observed macOS Chrome
+    # login flow reports `Origin: null` together with `same-origin`.
     return fetch_site == "cross-site"
+
+
+def cross_site_rejection() -> JSONResponse:
+    return JSONResponse(
+        {"detail": "拒绝跨站请求"},
+        status_code=403,
+        media_type="application/json; charset=utf-8",
+    )
 
 
 def valid_login_csrf(request: Request) -> bool:
@@ -140,7 +150,7 @@ def create_login_csrf() -> str:
 
 async def browser_security(request: Request, call_next):
     if is_cross_site_write(request) and not valid_login_csrf(request):
-        response = JSONResponse({"detail": "拒绝跨站请求"}, status_code=403)
+        response = cross_site_rejection()
     else:
         response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -222,7 +232,7 @@ def session_user(db, request: Request) -> tuple[UserSession | None, User | None]
 @app.middleware("http")
 async def site_login_gate(request: Request, call_next):
     if is_cross_site_write(request) and not valid_login_csrf(request):
-        return JSONResponse({"detail": "拒绝跨站请求"}, status_code=403)
+        return cross_site_rejection()
     settings = get_settings()
     if not settings.site_auth_enabled:
         return await call_next(request)

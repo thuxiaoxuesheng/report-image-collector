@@ -71,6 +71,14 @@ def test_same_origin_write_wins_over_inconsistent_fetch_metadata() -> None:
     assert is_cross_site_write(_write_request(fetch_site="cross-site"))
 
 
+def test_opaque_origin_uses_browser_fetch_metadata() -> None:
+    observed_login_request = _write_request(origin="null", fetch_site="same-origin")
+
+    assert not is_cross_site_write(observed_login_request)
+    assert not valid_login_csrf(observed_login_request)
+    assert is_cross_site_write(_write_request(origin="null", fetch_site="cross-site"))
+
+
 def test_loopback_reverse_proxy_forwarded_host_is_accepted() -> None:
     request = _write_request(
         origin="https://public.example",
@@ -473,6 +481,20 @@ def test_login_page_response_has_security_headers(monkeypatch) -> None:
     csrf_cookie = response.cookies.get("xhs_login_csrf")
     assert csrf_cookie
     assert f'action="/site-login?csrf={csrf_cookie}"' in response.text
+
+
+def test_cross_site_rejection_declares_utf8_json() -> None:
+    response = TestClient(app).post(
+        "/site-login",
+        headers={
+            "Origin": "https://attacker.example",
+            "Sec-Fetch-Site": "cross-site",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.headers["content-type"] == "application/json; charset=utf-8"
+    assert response.json() == {"detail": "拒绝跨站请求"}
 
 
 def test_local_api_status_is_emitted_before_response_body() -> None:
