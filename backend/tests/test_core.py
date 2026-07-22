@@ -1,6 +1,7 @@
 import zipfile
 from datetime import date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -16,6 +17,7 @@ import backend.app.ai as ai_module
 import backend.app.bootstrap as bootstrap
 import backend.app.collector as collector
 import backend.app.exporter as exporter
+import backend.app.main as main_module
 from backend.app.ai import _openai_endpoint, _parse_json
 from backend.app.api import (
     create_user,
@@ -203,6 +205,7 @@ def test_all_users_share_the_administrator_model_configuration(
 
 def test_ordinary_user_cannot_modify_the_shared_model_configuration(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     engine = create_engine(f"sqlite:///{(tmp_path / 'model-permission.db').as_posix()}")
     Base.metadata.create_all(engine)
@@ -227,6 +230,11 @@ def test_ordinary_user_cannot_modify_the_shared_model_configuration(
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         user=ordinary, organization=workspace
+    )
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(site_auth_enabled=False, environment="development"),
     )
     try:
         response = TestClient(app).put(
